@@ -1,38 +1,44 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import Button from '@material-ui/core/Button';
-import { InstagramAPI } from '../services/InstagramBasicDisplayAPI';
-import { useLocation } from "react-router-dom";
+import { InstagramBasicAPI } from '../services/InstagramBasicDisplayAPI';
+import { InstagramGraphAPI} from '../services/InstagramGraphAPI';
+import { useLocation, useHistory } from "react-router-dom";
 import { queryToObject } from '../helpers/linkQueryToObject';
-import { checkResponseOk } from '../helpers/checkResponseOk';
 import  Cookies from "js-cookie";
 
-export function HomePage() {
-  const Instagram = new InstagramAPI();
+export function HomePage({ setUser }) {
+  const InstagramBasic = useMemo(() => new InstagramBasicAPI(), []);
+  const InstagramGraph = useMemo(() => new InstagramGraphAPI(), []);
   const query = useLocation();
+  const history = useHistory();
 
   useEffect(() => {
-    const { code } = queryToObject(query);
+    const code = queryToObject(query)?.code;
 
     if (code) {
-        Instagram.GetAccessToken(code)
-            .then(checkResponseOk)
-            .then(data => {
-                Cookies.set('acess_token', data['acess_token'], { expires: 1 / 24 });
-                Cookies.set('user_id', data['user_id'], { expires: 1 / 24 });
-                console.log(true);
+      InstagramBasic.GetAccessToken(code)
+            .then(date => {
+                const cookieExpires = date['expires_in'] / 86400; 
+                Cookies.set('access_token', date['access_token'], cookieExpires);
+                Cookies.set('user_id', date['user_id'], cookieExpires);
+                return date;
+            })
+            .then(({ access_token }) => InstagramGraph.GetUser(access_token))
+            .then((date) => { 
+                setUser(date);
+                history.replace(`/${date.username}`); 
             })
             .catch(() => {
-                Cookies.remove('acess_token');
-                Cookies.remove('user_id');
-                console.log(false);
+                setUser(null);
+                alert("try later");
             })
-    }
-   }, [queryToObject]);
+    } 
+   }, [query, InstagramBasic, InstagramGraph, history, setUser]);
 
   return (
     <div className="App">
       <Button>
-        <a href={ Instagram.AuthorizeUserLink() }>
+        <a href={ InstagramBasic.AuthorizeUserLink() }>
           Sign In
         </a>
       </Button>
